@@ -98,8 +98,6 @@ class Work:
             search_terms: List[str],
             base_download_path: Path,
     ):
-        self._run = True
-
         self.client_id = client_id
         self.client_secret = client_secret
         self.username = username
@@ -108,9 +106,6 @@ class Work:
         self.search_terms = search_terms
 
         self.download_path = Path.joinpath(base_download_path, reddit_entity.replace('-', '_'))
-
-    def stop(self):
-        self._run = False
 
 
 def main(
