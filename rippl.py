@@ -122,13 +122,27 @@ def main(
             environ.get('RIPPL_REDDITORS', ''),
             help='Comma separated string, ex: "a,b,c" or "a, b, c"',
         ),
-        search_terms: str = typer.Option('', help='Comma separated string, ex: "a,b,c" or "a, b, c"'),
-        base_download_path: Optional[Path] = typer.Option(".", exists=True, dir_okay=True, writable=True),
+        search_terms: str = typer.Option(
+            environ.get('RIPPL_SEARCH_TERMS', ''),
+            help='Comma separated string, ex: "a,b,c" or "a, b, c"',
+        ),
+        base_download_path: Optional[Path] = typer.Option(
+            environ.get('RIPPL_BASE_DOWNLOAD_PATH', '.'),
+            exists=True,
+            dir_okay=True,
+            writable=True,
+        ),
 ):
     subreddits = [s.strip() for s in subreddits.split(',')] if len(subreddits) > 0 else []
     redditors = [r.strip() for r in redditors.split(',')] if len(redditors) > 0 else []
 
-    thread_pool = ThreadPool(len(subreddits) + len(redditors))
+    num_threads = len(subreddits) + len(redditors)
+    if num_threads == 0:
+        logger.info("Nothing to do... Okay, bye!")
+
+        return
+
+    thread_pool = ThreadPool(num_threads)
 
     search_terms = [s.strip for s in search_terms.split(',')] if len(search_terms) > 0 else []
 
