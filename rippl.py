@@ -72,7 +72,7 @@ def stream_subreddit(work):
     reddit = get_praw_client(work.client_id, work.client_secret, work.username, work.password)
     subreddit = reddit.subreddit(work.reddit_entity)
 
-    for submission in subreddit.stream.submissions(skip_existing=False):
+    for submission in subreddit.stream.submissions(skip_existing=True):
         try:
             process_submission(submission, work.search_terms, work.download_path)
         except exceptions.PRAWException as e:
@@ -83,7 +83,7 @@ def stream_redditor(work):
     reddit = get_praw_client(work.client_id, work.client_secret, work.username, work.password)
     redditor = reddit.redditor(work.reddit_entity)
 
-    for submission in redditor.stream.submissions(skip_existing=False):
+    for submission in redditor.stream.submissions(skip_existing=True):
         process_submission(submission, work.search_terms, work.download_path)
 
 
