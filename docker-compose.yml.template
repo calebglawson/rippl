@@ -2,6 +2,7 @@ version: "3.9"
 services:
   rippl:
     build: .
+    image: rippl:latest
     environment:
       RIPPL_CLIENT_ID: ${RIPPL_CLIENT_ID}
       RIPPL_CLIENT_SECRET: ${RIPPL_CLIENT_SECRET}
