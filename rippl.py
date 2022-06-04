@@ -2,6 +2,7 @@ import logging.handlers
 from multiprocessing.pool import ThreadPool
 from os import environ
 from pathlib import Path
+from sys import stdout
 from typing import Optional, List
 
 import typer
@@ -9,6 +10,7 @@ from praw import Reddit, exceptions, models
 from bdfr.downloader import DownloadFactory
 from bdfr.exceptions import NotADownloadableLinkError, SiteDownloaderError
 
+Log_Format = "%(levelname)s %(asctime)s - %(message)s"
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +59,8 @@ def process_submission(submission: models.Submission, search_terms: List[str], b
             try:
                 with open(filepath, 'wb') as new:
                     new.write(resource.content)
+
+                logger.info(f'Downloaded: {filepath}')
             except Exception as e:
                 logger.error(f'Failed to write file {filepath}: {e}')
 
@@ -133,6 +137,13 @@ def main(
             writable=True,
         ),
 ):
+    logging.basicConfig(
+        stream=stdout,
+        filemode="w",
+        format=Log_Format,
+        level=logging.INFO,
+    )
+
     subreddits = [s.strip() for s in subreddits.split(',')] if len(subreddits) > 0 else []
     redditors = [r.strip() for r in redditors.split(',')] if len(redditors) > 0 else []
 
