@@ -54,17 +54,20 @@ class BaseStreamer(threading.Thread):
         raise NotImplementedError
 
     def _stream(self):
-        for submission in self._entity.stream.submissions(skip_existing=True, pause_after=-1):
-            if self.shutdown_flag.is_set():
-                logger.info(f'Thread {self.ident} exited')
-                break
-            elif submission is None:
-                continue
+        try:
+            for submission in self._entity.stream.submissions(skip_existing=True, pause_after=-1):
+                if self.shutdown_flag.is_set():
+                    logger.info(f'Thread {self.ident} exited')
+                    break
+                elif submission is None:
+                    continue
 
-            try:
-                self._process_submission(submission)
-            except exceptions.PRAWException as e:
-                logger.error(f'Failed to retrieve submission: {e}')
+                try:
+                    self._process_submission(submission)
+                except exceptions.PRAWException as e:
+                    logger.error(f'Failed to retrieve submission: {e}')
+        except Exception as e:
+            logger.error(f'Failed to stream {self.entity_name}: {e}')
 
     def _process_submission(self, submission: models.Submission):
         if self.search_terms:
