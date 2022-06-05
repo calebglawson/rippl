@@ -25,20 +25,20 @@ class BaseStreamer(threading.Thread):
             password: str,
             entity_name: str,
             search_terms: List[str],
-            download_path: Path,
+            base_download_path: Path,
     ):
         threading.Thread.__init__(self)
 
         # The shutdown_flag is a threading.Event object that
         # indicates whether the thread should be terminated.
-        self.shutdown_flag = threading.Event()
+        self._shutdown_flag = threading.Event()
 
-        self.entity_name = entity_name
-        self.search_terms = search_terms
+        self._entity_name = entity_name
+        self._search_terms = search_terms
 
-        self.download_path = Path.joinpath(download_path, entity_name.replace('-', '_'))
+        self._download_path = Path.joinpath(base_download_path, entity_name.replace('-', '_'))
 
-        self.client = Reddit(
+        self._client = Reddit(
             client_id=client_id,
             client_secret=client_secret,
             password=password,
@@ -49,6 +49,9 @@ class BaseStreamer(threading.Thread):
     def run(self):
         self._stream()
 
+    def begin_shutdown(self):
+        self._shutdown_flag.set()
+
     @property
     def _entity(self):
         raise NotImplementedError
@@ -56,22 +59,22 @@ class BaseStreamer(threading.Thread):
     def _stream(self):
         try:
             for submission in self._entity.stream.submissions(skip_existing=True, pause_after=-1):
-                if self.shutdown_flag.is_set():
+                if self._shutdown_flag.is_set():
                     logger.info(f'Thread {self.ident} exited')
                     break
                 elif submission is None:
                     continue
 
                 try:
-                    self._process_submission(submission)
+                    self._download_submission(submission)
                 except exceptions.PRAWException as e:
                     logger.error(f'Failed to retrieve submission: {e}')
         except Exception as e:
-            logger.error(f'Failed to stream {self.entity_name}: {e}')
+            logger.error(f'Failed to stream {self._entity_name}: {e}')
 
-    def _process_submission(self, submission: models.Submission):
-        if self.search_terms:
-            if not any([t in submission.title for t in self.search_terms]):
+    def _download_submission(self, submission: models.Submission):
+        if self._search_terms:
+            if not any([t in submission.title for t in self._search_terms]):
                 return
 
         try:
@@ -98,10 +101,10 @@ class BaseStreamer(threading.Thread):
                 if "txt" in ext:
                     return
 
-                filepath = Path.joinpath(self.download_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
+                filepath = Path.joinpath(self._download_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
 
                 try:
-                    Path(self.download_path).mkdir(exist_ok=True)
+                    Path(self._download_path).mkdir(exist_ok=True)
 
                     with open(filepath, 'wb') as new:
                         new.write(resource.content)
@@ -123,7 +126,7 @@ class SubredditStreamer(BaseStreamer):
         password: str,
         subreddit_name: str,
         search_terms: List[str],
-        download_path: Path,
+        base_download_path: Path,
     ):
         super().__init__(
             client_id,
@@ -132,12 +135,12 @@ class SubredditStreamer(BaseStreamer):
             password,
             subreddit_name,
             search_terms,
-            download_path,
+            base_download_path,
         )
 
     @property
     def _entity(self):
-        return self.client.subreddit(self.entity_name)
+        return self._client.subreddit(self._entity_name)
 
 
 class RedditorStreamer(BaseStreamer):
@@ -149,7 +152,7 @@ class RedditorStreamer(BaseStreamer):
         password: str,
         redditor_name: str,
         search_terms: List[str],
-        download_path: Path,
+        base_download_path: Path,
     ):
         super().__init__(
             client_id,
@@ -158,12 +161,12 @@ class RedditorStreamer(BaseStreamer):
             password,
             redditor_name,
             search_terms,
-            download_path
+            base_download_path
         )
 
     @property
     def _entity(self):
-        return self.client.redditor(self.entity_name)
+        return self._client.redditor(self._entity_name)
 
 
 class ServiceExit(Exception):
@@ -261,8 +264,9 @@ def main(
             time.sleep(0.5)
     except ServiceExit:
         for s in streamers:
-            s.shutdown_flag.set()
+            s.begin_shutdown()
 
+        # wait for every streamer to stop
         for s in streamers:
             s.join()
 
