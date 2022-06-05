@@ -51,10 +51,8 @@ def process_submission(submission: models.Submission, search_terms: List[str], b
         try:
             resource.download()
 
-            filepath = Path.joinpath(
-                base_path,
-                f'{submission.author}_{resource.hash.hexdigest()}{resource.extension}',
-            )
+            ext = resource.extension if "." in resource.extension else f'.{resource.extension}'
+            filepath = Path.joinpath(base_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
 
             try:
                 with open(filepath, 'wb') as new:
@@ -84,7 +82,10 @@ def stream_redditor(work):
     redditor = reddit.redditor(work.reddit_entity)
 
     for submission in redditor.stream.submissions(skip_existing=True):
-        process_submission(submission, work.search_terms, work.download_path)
+        try:
+            process_submission(submission, work.search_terms, work.download_path)
+        except exceptions.PRAWException as e:
+            logger.error(f'Failed to retrieve submission: {e}')
 
 
 class Work:
@@ -141,6 +142,7 @@ def main(
 
     subreddits = [s.strip() for s in subreddits.split(',')] if len(subreddits) > 0 else []
     redditors = [r.strip() for r in redditors.split(',')] if len(redditors) > 0 else []
+    search_terms = [s.strip() for s in search_terms.split(',')] if len(search_terms) > 0 else []
 
     num_threads = len(subreddits) + len(redditors)
     if num_threads == 0:
@@ -149,8 +151,6 @@ def main(
         return
 
     thread_pool = ThreadPool(num_threads)
-
-    search_terms = [s.strip() for s in search_terms.split(',')] if len(search_terms) > 0 else []
 
     for subreddit in subreddits:
         thread_pool.apply_async(
