@@ -52,6 +52,9 @@ def process_submission(submission: models.Submission, search_terms: List[str], b
             resource.download()
 
             ext = resource.extension if "." in resource.extension else f'.{resource.extension}'
+            if any([s in ext for s in ['txt']]):
+                return
+
             filepath = Path.joinpath(base_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
 
             try:
