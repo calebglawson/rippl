@@ -1,5 +1,7 @@
 import logging.handlers
-from multiprocessing.pool import ThreadPool
+import signal
+import threading
+import time
 from os import environ
 from pathlib import Path
 from sys import stdout
@@ -14,102 +16,164 @@ Log_Format = "%(levelname)s %(asctime)s - %(message)s"
 logger = logging.getLogger(__name__)
 
 
-def get_praw_client(client_id, client_secret, username, password):
-    return Reddit(
-        client_id=client_id,
-        client_secret=client_secret,
-        password=password,
-        user_agent="rippl v1",
-        username=username,
-    )
-
-
-def process_submission(submission: models.Submission, search_terms: List[str], base_path: Path):
-    if search_terms:
-        if not any([t in submission.title for t in search_terms]) and\
-                not any([t in submission.selftext for t in search_terms]):
-            return
-
-    try:
-        downloader_class = DownloadFactory.pull_lever(submission.url)
-        downloader = downloader_class(submission)
-        logger.debug(f'Using {downloader_class.__name__} with url {submission.url}')
-
-    except NotADownloadableLinkError as e:
-        logger.error(f'Could not download submission {submission.id}: {e}')
-
-        return
-    try:
-        resources = downloader.find_resources()
-    except SiteDownloaderError as e:
-        logger.error(f'Site {downloader_class.__name__} failed to download submission {submission.id}: {e}')
-
-        return
-
-    Path(base_path).mkdir(exist_ok=True)
-    for resource in resources:
-        try:
-            resource.download()
-
-            ext = resource.extension if "." in resource.extension else f'.{resource.extension}'
-            if any([s in ext for s in ['txt']]):
-                return
-
-            filepath = Path.joinpath(base_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
-
-            try:
-                with open(filepath, 'wb') as new:
-                    new.write(resource.content)
-
-                logger.info(f'Downloaded: {filepath}')
-            except Exception as e:
-                logger.error(f'Failed to write file {filepath}: {e}')
-
-        except Exception as e:
-            logger.error(f'Failed to download resource {resource.url} for submission {submission.id}: {e}')
-
-
-def stream_subreddit(work):
-    reddit = get_praw_client(work.client_id, work.client_secret, work.username, work.password)
-    subreddit = reddit.subreddit(work.reddit_entity)
-
-    for submission in subreddit.stream.submissions(skip_existing=True):
-        try:
-            process_submission(submission, work.search_terms, work.download_path)
-        except exceptions.PRAWException as e:
-            logger.error(f'Failed to retrieve submission: {e}')
-
-
-def stream_redditor(work):
-    reddit = get_praw_client(work.client_id, work.client_secret, work.username, work.password)
-    redditor = reddit.redditor(work.reddit_entity)
-
-    for submission in redditor.stream.submissions(skip_existing=True):
-        try:
-            process_submission(submission, work.search_terms, work.download_path)
-        except exceptions.PRAWException as e:
-            logger.error(f'Failed to retrieve submission: {e}')
-
-
-class Work:
+class BaseStreamer(threading.Thread):
     def __init__(
             self,
             client_id: str,
             client_secret: str,
             username: str,
             password: str,
-            reddit_entity: str,
+            entity_name: str,
             search_terms: List[str],
-            base_download_path: Path,
+            download_path: Path,
     ):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.username = username
-        self.password = password
-        self.reddit_entity = reddit_entity
+        threading.Thread.__init__(self)
+
+        # The shutdown_flag is a threading.Event object that
+        # indicates whether the thread should be terminated.
+        self.shutdown_flag = threading.Event()
+
+        self.entity_name = entity_name
         self.search_terms = search_terms
 
-        self.download_path = Path.joinpath(base_download_path, reddit_entity.replace('-', '_'))
+        self.download_path = Path.joinpath(download_path, entity_name.replace('-', '_'))
+
+        self.client = Reddit(
+            client_id=client_id,
+            client_secret=client_secret,
+            password=password,
+            user_agent="rippl v1",
+            username=username,
+        )
+
+    def run(self):
+        self._stream()
+
+    @property
+    def _entity(self):
+        raise NotImplementedError
+
+    def _stream(self):
+        for submission in self._entity.stream.submissions(skip_existing=True, pause_after=-1):
+            if self.shutdown_flag.is_set():
+                logger.info(f'Thread {self.ident} exited')
+                break
+            elif submission is None:
+                continue
+
+            try:
+                self._process_submission(submission)
+            except exceptions.PRAWException as e:
+                logger.error(f'Failed to retrieve submission: {e}')
+
+    def _process_submission(self, submission: models.Submission):
+        if self.search_terms:
+            if not any([t in submission.title for t in self.search_terms]):
+                return
+
+        try:
+            downloader_class = DownloadFactory.pull_lever(submission.url)
+            downloader = downloader_class(submission)
+            logger.debug(f'Using {downloader_class.__name__} with url {submission.url}')
+
+        except NotADownloadableLinkError as e:
+            logger.error(f'Could not download submission {submission.id}: {e}')
+
+            return
+        try:
+            resources = downloader.find_resources()
+        except SiteDownloaderError as e:
+            logger.error(f'Site {downloader_class.__name__} failed to download submission {submission.id}: {e}')
+
+            return
+
+        for resource in resources:
+            try:
+                resource.download()
+
+                ext = resource.extension if "." in resource.extension else f'.{resource.extension}'
+                if "txt" in ext:
+                    return
+
+                filepath = Path.joinpath(self.download_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
+
+                try:
+                    Path(self.download_path).mkdir(exist_ok=True)
+
+                    with open(filepath, 'wb') as new:
+                        new.write(resource.content)
+
+                    logger.info(f'Downloaded: {filepath}')
+                except Exception as e:
+                    logger.error(f'Failed to write file {filepath}: {e}')
+
+            except Exception as e:
+                logger.error(f'Failed to download resource {resource.url} for submission {submission.id}: {e}')
+
+
+class SubredditStreamer(BaseStreamer):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        username: str,
+        password: str,
+        subreddit_name: str,
+        search_terms: List[str],
+        download_path: Path,
+    ):
+        super().__init__(
+            client_id,
+            client_secret,
+            username,
+            password,
+            subreddit_name,
+            search_terms,
+            download_path,
+        )
+
+    @property
+    def _entity(self):
+        return self.client.subreddit(self.entity_name)
+
+
+class RedditorStreamer(BaseStreamer):
+    def __init__(
+        self,
+        client_id: str,
+        client_secret: str,
+        username: str,
+        password: str,
+        redditor_name: str,
+        search_terms: List[str],
+        download_path: Path,
+    ):
+        super().__init__(
+            client_id,
+            client_secret,
+            username,
+            password,
+            redditor_name,
+            search_terms,
+            download_path
+        )
+
+    @property
+    def _entity(self):
+        return self.client.redditor(self.entity_name)
+
+
+class ServiceExit(Exception):
+    """
+    Custom exception which is used to trigger the clean exit
+    of all running threads and the main program.
+    """
+    pass
+
+
+def service_shutdown(signum, _):
+    logger.info('Caught signal %d, triggering graceful shutdown' % signum)
+    raise ServiceExit
 
 
 def main(
@@ -143,52 +207,63 @@ def main(
         level=logging.INFO,
     )
 
+    # Register the signal handlers
+    signal.signal(signal.SIGTERM, service_shutdown)
+    signal.signal(signal.SIGINT, service_shutdown)
+
     subreddits = [s.strip() for s in subreddits.split(',')] if len(subreddits) > 0 else []
     redditors = [r.strip() for r in redditors.split(',')] if len(redditors) > 0 else []
     search_terms = [s.strip() for s in search_terms.split(',')] if len(search_terms) > 0 else []
 
     num_threads = len(subreddits) + len(redditors)
     if num_threads == 0:
-        logger.info("Nothing to do... Okay, bye!")
+        logger.info("Nothing to do...")
 
         return
+    else:
+        logger.info(f'Starting {len(subreddits)} subreddit streamers and {len(redditors)} redditor streamers')
 
-    thread_pool = ThreadPool(num_threads)
+    streamers = [
+        SubredditStreamer(
+            client_id,
+            client_secret,
+            username,
+            password,
+            s,
+            search_terms,
+            base_download_path,
+        ) for s in subreddits
+    ]
 
-    for subreddit in subreddits:
-        thread_pool.apply_async(
-            stream_subreddit,
-            args=(
-                Work(
-                    client_id,
-                    client_secret,
-                    username,
-                    password,
-                    subreddit,
-                    search_terms,
-                    base_download_path,
-                ),
-            ),
-        )
+    # noinspection PyTypeChecker
+    streamers.extend(
+        [
+            RedditorStreamer(
+                client_id,
+                client_secret,
+                username,
+                password,
+                r,
+                search_terms,
+                base_download_path,
+            ) for r in redditors
+        ]
+    )
 
-    for redditor in redditors:
-        thread_pool.apply_async(
-            stream_redditor,
-            args=(
-                Work(
-                    client_id,
-                    client_secret,
-                    username,
-                    password,
-                    redditor,
-                    search_terms,
-                    base_download_path,
-                ),
-            ),
-        )
+    try:
+        for s in streamers:
+            s.start()
 
-    thread_pool.close()
-    thread_pool.join()
+        while True:
+            time.sleep(0.5)
+    except ServiceExit:
+        for s in streamers:
+            s.shutdown_flag.set()
+
+        for s in streamers:
+            s.join()
+
+    logging.info("Exited")
 
 
 if __name__ == '__main__':
