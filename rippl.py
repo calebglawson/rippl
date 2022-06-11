@@ -1,3 +1,4 @@
+import gc
 import logging.handlers
 import signal
 import threading
@@ -8,9 +9,9 @@ from sys import stdout
 from typing import Optional, List
 
 import typer
-from praw import Reddit, exceptions, models
 from bdfr.downloader import DownloadFactory
 from bdfr.exceptions import NotADownloadableLinkError, SiteDownloaderError
+from praw import Reddit, exceptions, models
 
 Log_Format = "%(levelname)s %(asctime)s - %(message)s"
 logger = logging.getLogger(__name__)
@@ -63,6 +64,8 @@ class BaseStreamer(threading.Thread):
                     logger.info(f'Thread {self.ident} exited')
                     break
                 elif submission is None:
+                    gc.collect()
+
                     continue
 
                 try:
