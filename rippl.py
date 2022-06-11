@@ -64,8 +64,6 @@ class BaseStreamer(threading.Thread):
                     logger.info(f'Thread {self.ident} exited')
                     break
                 elif submission is None:
-                    gc.collect()
-
                     continue
 
                 try:
@@ -264,7 +262,9 @@ def main(
             s.start()
 
         while True:
-            time.sleep(0.5)
+            gc.collect()
+            time.sleep(500)
+
     except ServiceExit:
         for s in streamers:
             s.begin_shutdown()
