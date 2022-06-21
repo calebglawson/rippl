@@ -13,6 +13,8 @@ from bdfr.downloader import DownloadFactory
 from bdfr.exceptions import NotADownloadableLinkError, SiteDownloaderError
 from praw import Reddit, exceptions, models
 
+models.Submission
+
 Log_Format = "%(levelname)s %(asctime)s - %(message)s"
 logger = logging.getLogger(__name__)
 
