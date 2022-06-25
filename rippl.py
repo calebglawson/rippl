@@ -1,11 +1,11 @@
-from fastapi import BackgroundTasks, FastAPI
-from pydantic import BaseModel
+from fastapi import BackgroundTasks, FastAPI, Depends
+from pydantic import BaseModel, BaseSettings
 from http import HTTPStatus
 import logging
 from pathlib import Path
 from bdfr.downloader import DownloadFactory
 from bdfr.exceptions import NotADownloadableLinkError, SiteDownloaderError
-from os import environ
+from functools import lru_cache
 
 from praw import Reddit
 from praw.models import Submission
@@ -19,18 +19,33 @@ class Download(BaseModel):
     submission_id: str
 
 
-def download(submission_id: str):
+class Settings(BaseSettings):
+    rippl_client_id: str
+    rippl_client_secret: str
+    rippl_username: str
+    rippl_password: str
+    rippl_base_download_path: Path
+
+    class Config:
+        env_file = ".env"
+
+
+@lru_cache()
+def get_settings():
+    return Settings()
+
+
+def download(submission_id: str, settings: Settings):
     r = Reddit(
-        client_id=environ.get('RIPPL_CLIENT_ID'),
-        client_secret=environ.get('RIPPL_CLIENT_SECRET'),
-        password=environ.get('RIPPL_PASSWORD'),
+        client_id=settings.rippl_client_id,
+        client_secret=settings.rippl_client_secret,
+        password=settings.rippl_password,
         user_agent="rippl v1",
-        username=environ.get('RIPPL_USERNAME'),
+        username=settings.rippl_username,
     )
 
     submission = Submission(r, id=submission_id)
-    base_path = Path(environ.get('RIPPL_BASE_DOWNLOAD_PATH', '.'))
-    subreddit_path = Path.joinpath(base_path, submission.subreddit.display_name)
+    subreddit_path = Path.joinpath(settings.rippl_base_download_path, submission.subreddit.display_name)
 
     try:
         downloader_class = DownloadFactory.pull_lever(submission.url)
@@ -73,7 +88,7 @@ def download(submission_id: str):
 
 
 @app.post("/", status_code=HTTPStatus.ACCEPTED)
-async def accept_download(dl: Download, background_tasks: BackgroundTasks):
-    background_tasks.add_task(download, dl.submission_id)
+async def accept_download(dl: Download, background_tasks: BackgroundTasks, settings: Settings = Depends(get_settings)):
+    background_tasks.add_task(download, dl.submission_id, settings)
 
     return {"message": "Downloading in background"}
