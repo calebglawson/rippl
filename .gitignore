@@ -1,2 +1,4 @@
 .idea
 site_downloaders
+*.log
+__pycache__

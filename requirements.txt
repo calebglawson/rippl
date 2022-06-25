@@ -1,3 +1,4 @@
 bdfr
 praw
 typer
+fastapi
