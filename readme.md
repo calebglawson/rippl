@@ -1,6 +1,6 @@
 Threaded, streaming downloader of Reddit media.
 
-Why separate the Download Server from the Stream Client? Writing to external directories from a docker volume causes files to be cached in-memory on Linux hosts. While this memory is available to other processes, these files aren't accessed by the program after being downloaded. Caching these files in RAM is wasteful, in the loosest sense of the term. The download server is meant to be run on the host OS to circumvent this caching behavior.
+Why separate the Download Server from the Stream Client? Writing to external directories from a docker volume causes files to be cached in-memory on Linux hosts. While this memory is available to other processes, these files aren't accessed by the program after being downloaded.
 
 ## Download Server
 1. Install python requirements.
