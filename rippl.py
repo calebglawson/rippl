@@ -21,13 +21,16 @@ class Download(BaseModel):
 
 def download(submission_id: str):
     r = Reddit(
+        client_id=environ.get('RIPPL_CLIENT_ID'),
+        client_secret=environ.get('RIPPL_CLIENT_SECRET'),
+        password=environ.get('RIPPL_PASSWORD'),
         user_agent="rippl v1",
+        username=environ.get('RIPPL_USERNAME'),
     )
 
     submission = Submission(r, id=submission_id)
     base_path = Path(environ.get('RIPPL_BASE_DOWNLOAD_PATH', '.'))
     subreddit_path = Path.joinpath(base_path, submission.subreddit.display_name)
-    logger.info(subreddit_path)
 
     try:
         downloader_class = DownloadFactory.pull_lever(submission.url)
