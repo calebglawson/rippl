@@ -1,13 +1,16 @@
-Threaded, streaming downloader of Reddit media. Run this via command line or build and run your own docker image.
+Threaded, streaming downloader of Reddit media.
 
-## Command line
-`python ./rippl.py --help`
+Why separate the Download Server from the Stream Client? Writing to external directories from a docker volume causes files to be cached in-memory on Linux hosts. While this memory is available to other processes, these files aren't accessed by the program after being downloaded. Caching these files in RAM is wasteful, in the loosest sense of the term. The download server is meant to be run on the host OS to circumvent this caching behavior.
 
-## Docker
+## Download Server
+1. Install python requirements.
+2. `uvicorn rippl:app --log-config ./logging.yml`
+
+## Stream Client
 1. Build an image from the Dockerfile.
 2. Use the docker-compose template.
 3. Fill out all the environment variables.
 4. Deploy the stack.
 
 ## Attributions
-This script uses components of [Bulk Media Downloader for Reddit, which is GNU GPL Licensed](https://github.com/aliparlakci/bulk-downloader-for-reddit/blob/master/LICENSE).
+The Download Server uses components of [Bulk Media Downloader for Reddit, which is GNU GPL Licensed](https://github.com/aliparlakci/bulk-downloader-for-reddit/blob/master/LICENSE).

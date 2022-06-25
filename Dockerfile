@@ -1,14 +1,21 @@
-# syntax=docker/dockerfile:1
-
-FROM python:3.9-slim-buster
-
+FROM golang:1.18.3 as builder
+# Define build env
+ENV GOOS linux
+ENV CGO_ENABLED 0
+# Add a work directory
 WORKDIR /app
+# Cache and install dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+# Copy app files
+COPY rippl.go .
+# Build app
+RUN go build -o app
 
-COPY requirements.txt requirements.txt
-RUN pip3 install -r requirements.txt
-
-COPY . .
-
-RUN apt-get -y update && apt-get install -y ffmpeg
-
-CMD [ "python3", "-u", "rippl.py"]
+FROM alpine:3.14 as production
+# Add certificates
+RUN apk add --no-cache ca-certificates
+# Copy built binary from builder
+COPY --from=builder app .
+# Exec built binary
+CMD ./app
