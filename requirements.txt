@@ -3,3 +3,4 @@ praw
 typer
 fastapi
 pydantic[dotenv]
+uvicorn[standard]

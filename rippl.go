@@ -16,7 +16,7 @@ import (
 	"github.com/vartanbeno/go-reddit/v2/reddit"
 )
 
-func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval time.Duration) {
+func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval time.Duration, searchTerms []string) {
 	defer wg.Done()
 
 	redditClient, err := reddit.NewClient(
@@ -34,16 +34,6 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 	}
 
 	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-
-	searchTerms := make([]string, 0)
-	searchTermsStr := os.Getenv("RIPPL_SEARCH_TERMS")
-	if len(searchTermsStr) > 0 {
-		parts := strings.Split(searchTermsStr, ",")
-
-		for _, part := range parts {
-			searchTerms = append(searchTerms, strings.TrimSpace(part))
-		}
-	}
 
 	posts, errs, stop := redditClient.Stream.Posts(
 		strings.TrimSpace(subreddit),
@@ -111,11 +101,21 @@ func main() {
 		interval = len(subreddits)
 	}
 
+	searchTerms := make([]string, 0)
+	searchTermsStr := os.Getenv("RIPPL_SEARCH_TERMS")
+	if len(searchTermsStr) > 0 {
+		parts := strings.Split(searchTermsStr, ",")
+
+		for _, part := range parts {
+			searchTerms = append(searchTerms, strings.TrimSpace(part))
+		}
+	}
+
 	for i := range subreddits {
 		subreddit := subreddits[i]
 		wg.Add(1)
 
-		go stream(ctx, &wg, subreddit, time.Duration(interval)*time.Second)
+		go stream(ctx, &wg, subreddit, time.Duration(interval)*time.Second, searchTerms)
 	}
 
 	wg.Wait()
