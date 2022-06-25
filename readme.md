@@ -4,12 +4,12 @@ Why separate the Download Server from the Stream Client? Writing to external dir
 
 ## Download Server
 1. Install python requirements.
-2. `uvicorn rippl:app --log-config ./logging.yml`
+2. Fill out the .env file template.
+3. `uvicorn rippl:app --log-config ./logging.yml`
 
 ## Stream Client
 1. Build an image from the Dockerfile.
-2. Use the docker-compose template.
-3. Fill out all the environment variables.
+2. Fill out the docker-compose template.
 4. Deploy the stack.
 
 ## Attributions
