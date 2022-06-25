@@ -21,11 +21,7 @@ class Download(BaseModel):
 
 def download(submission_id: str):
     r = Reddit(
-        client_id=environ.get('RIPPL_CLIENT_ID'),
-        client_secret=environ.get('RIPPL_CLIENT_SECRET'),
-        password=environ.get('RIPPL_PASSWORD'),
         user_agent="rippl v1",
-        username=environ.get('RIPPL_USERNAME'),
     )
 
     submission = Submission(r, id=submission_id)
