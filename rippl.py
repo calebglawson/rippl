@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     rippl_base_download_path: Path
 
     class Config:
-        env_file = ".env.template"
+        env_file = ".env"
 
 
 @lru_cache()
