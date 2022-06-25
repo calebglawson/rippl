@@ -2,3 +2,4 @@ bdfr
 praw
 typer
 fastapi
+pydantic[dotenv]
