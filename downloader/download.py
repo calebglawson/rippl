@@ -35,7 +35,7 @@ def main(submission_id: str):
     )
 
     submission = Submission(r, id=submission_id)
-    subreddit_path = Path.joinpath(cfg.get(RIPPL_SECTION, "BaseDownloadPath"), submission.subreddit.display_name)
+    subreddit_path = Path.joinpath(Path(cfg.get(RIPPL_SECTION, "BaseDownloadPath")), submission.subreddit.display_name)
 
     try:
         downloader_class = DownloadFactory.pull_lever(submission.url)
