@@ -74,7 +74,7 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
 
-				return
+				continue
 			}
 
 			if err = resp.Body.Close(); err != nil {
@@ -87,6 +87,7 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 			log.Printf("Streaming failure: %s", err)
 		case <-ctx.Done():
 			log.Printf("Context cancelled, %s stream stopping", subreddit)
+
 			return
 		}
 	}
