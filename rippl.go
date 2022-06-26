@@ -14,27 +14,18 @@ import (
 	"time"
 
 	"github.com/vartanbeno/go-reddit/v2/reddit"
-	_ "net/http/pprof"
 )
 
-func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval time.Duration, searchTerms []string) {
+func stream(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	redditClient *reddit.Client,
+	downloadClient *http.Client,
+	subreddit string,
+	interval time.Duration,
+	searchTerms []string,
+) {
 	defer wg.Done()
-
-	redditClient, err := reddit.NewClient(
-		reddit.Credentials{
-			ID:       os.Getenv("RIPPL_CLIENT_ID"),
-			Secret:   os.Getenv("RIPPL_CLIENT_SECRET"),
-			Username: os.Getenv("RIPPL_USERNAME"),
-			Password: os.Getenv("RIPPL_PASSWORD"),
-		},
-	)
-	if err != nil {
-		log.Printf("Reddit Client failure: %s", err)
-
-		return
-	}
-
-	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	posts, errs, stop := redditClient.Stream.Posts(
 		strings.TrimSpace(subreddit),
@@ -99,14 +90,26 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 }
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("0.0.0.0:6060", nil))
-	}()
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
 	wg := sync.WaitGroup{}
+
+	redditClient, err := reddit.NewClient(
+		reddit.Credentials{
+			ID:       os.Getenv("RIPPL_CLIENT_ID"),
+			Secret:   os.Getenv("RIPPL_CLIENT_SECRET"),
+			Username: os.Getenv("RIPPL_USERNAME"),
+			Password: os.Getenv("RIPPL_PASSWORD"),
+		},
+	)
+	if err != nil {
+		log.Printf("Reddit Client failure: %s", err)
+
+		return
+	}
+
+	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	subredditsStr := os.Getenv("RIPPL_SUBREDDITS")
 	subreddits := strings.Split(subredditsStr, ",")
@@ -130,7 +133,7 @@ func main() {
 		subreddit := subreddits[i]
 		wg.Add(1)
 
-		go stream(ctx, &wg, subreddit, time.Duration(interval)*time.Second, searchTerms)
+		go stream(ctx, &wg, redditClient, downloadClient, subreddit, time.Duration(interval)*time.Second, searchTerms)
 	}
 
 	wg.Wait()
