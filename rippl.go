@@ -66,11 +66,16 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 				}
 			}
 
-			resp, err := downloadClient.Post(
-				os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"),
-				"application/json",
-				bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID))),
-			)
+			requestBody := bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID)))
+
+			req, err := http.NewRequest(http.MethodPost, os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"), requestBody)
+			if err != nil {
+				log.Printf("Preparing request to download submission %s failed: %s", post.ID, err)
+
+				continue
+			}
+
+			resp, err := downloadClient.Do(req)
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
 
