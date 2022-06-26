@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/vartanbeno/go-reddit/v2/reddit"
+	_ "net/http/pprof"
 )
 
 func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval time.Duration, searchTerms []string) {
@@ -50,8 +51,6 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 			if !ok {
 				return
 			}
-			postData := bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID)))
-
 			match := false
 			if len(searchTerms) > 0 {
 				for _, term := range searchTerms {
@@ -70,7 +69,7 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 			_, err := downloadClient.Post(
 				os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"),
 				"application/json",
-				postData,
+				bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID))),
 			)
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
@@ -88,6 +87,10 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 }
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
