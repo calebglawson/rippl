@@ -66,13 +66,21 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 				}
 			}
 
-			_, err := downloadClient.Post(
+			resp, err := downloadClient.Post(
 				os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"),
 				"application/json",
 				bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID))),
 			)
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
+
+				if err = resp.Body.Close(); err != nil {
+					log.Printf("Failed to close response body: %s", err)
+				}
+			}
+
+			if err = resp.Body.Close(); err != nil {
+				log.Printf("Failed to close response body: %s", err)
 			}
 		case err, ok := <-errs:
 			if !ok {
