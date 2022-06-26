@@ -43,14 +43,18 @@ func main() {
 			return
 		}
 
+		writer.WriteHeader(http.StatusAccepted)
+
 		go func() {
 			cmd := exec.Command("python3", "download.py", req.SubmissionID)
-			if err = cmd.Start(); err != nil {
-				log.Printf("Starting download script failed: %s", err)
+			stdOutStdErr, err := cmd.CombinedOutput()
+			if err != nil {
+				log.Printf("Running download script failed: %s", err)
 			}
+
+			log.Printf("Script output: %s", stdOutStdErr)
 		}()
 
-		writer.WriteHeader(http.StatusAccepted)
 	})
 
 	log.Print("Starting...")
