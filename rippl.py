@@ -6,6 +6,7 @@ from pathlib import Path
 from bdfr.downloader import DownloadFactory
 from bdfr.exceptions import NotADownloadableLinkError, SiteDownloaderError
 from functools import lru_cache
+import uvicorn.workers.UvicornWorker
 
 from praw import Reddit
 from praw.models import Submission
