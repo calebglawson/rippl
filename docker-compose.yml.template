@@ -10,4 +10,5 @@ services:
       RIPPL_USERNAME: ${RIPPL_USERNAME}
       RIPPL_SUBREDDITS: ${RIPPL_SUBREDDITS}
       RIPPL_DOWNLOAD_SERVER_URL: ${RIPPL_DOWNLOAD_SERVER_URL}
+    network_mode: host
     restart: unless-stopped
