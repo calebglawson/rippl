@@ -17,16 +17,24 @@ import (
 	_ "net/http/pprof"
 )
 
-func stream(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	redditClient *reddit.Client,
-	downloadClient *http.Client,
-	subreddit string,
-	interval time.Duration,
-	searchTerms []string,
-) {
+func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval time.Duration, searchTerms []string) {
 	defer wg.Done()
+
+	redditClient, err := reddit.NewClient(
+		reddit.Credentials{
+			ID:       os.Getenv("RIPPL_CLIENT_ID"),
+			Secret:   os.Getenv("RIPPL_CLIENT_SECRET"),
+			Username: os.Getenv("RIPPL_USERNAME"),
+			Password: os.Getenv("RIPPL_PASSWORD"),
+		},
+	)
+	if err != nil {
+		log.Printf("Reddit Client failure: %s", err)
+
+		return
+	}
+
+	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	posts, errs, stop := redditClient.Stream.Posts(
 		strings.TrimSpace(subreddit),
@@ -66,9 +74,7 @@ func stream(
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
 
-				if err = resp.Body.Close(); err != nil {
-					log.Printf("Failed to close response body: %s", err)
-				}
+				return
 			}
 
 			if err = resp.Body.Close(); err != nil {
@@ -99,22 +105,6 @@ func main() {
 	subredditsStr := os.Getenv("RIPPL_SUBREDDITS")
 	subreddits := strings.Split(subredditsStr, ",")
 
-	redditClient, err := reddit.NewClient(
-		reddit.Credentials{
-			ID:       os.Getenv("RIPPL_CLIENT_ID"),
-			Secret:   os.Getenv("RIPPL_CLIENT_SECRET"),
-			Username: os.Getenv("RIPPL_USERNAME"),
-			Password: os.Getenv("RIPPL_PASSWORD"),
-		},
-	)
-	if err != nil {
-		log.Printf("Reddit Client failure: %s", err)
-
-		return
-	}
-
-	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-
 	interval, err := strconv.Atoi(os.Getenv("RIPPL_INTERVAL"))
 	if err != nil {
 		interval = len(subreddits)
@@ -134,7 +124,7 @@ func main() {
 		subreddit := subreddits[i]
 		wg.Add(1)
 
-		go stream(ctx, &wg, redditClient, downloadClient, subreddit, time.Duration(interval)*time.Second, searchTerms)
+		go stream(ctx, &wg, subreddit, time.Duration(interval)*time.Second, searchTerms)
 	}
 
 	wg.Wait()
