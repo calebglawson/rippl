@@ -16,24 +16,16 @@ import (
 	"github.com/vartanbeno/go-reddit/v2/reddit"
 )
 
-func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval time.Duration, searchTerms []string) {
+func stream(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	redditClient *reddit.Client,
+	downloadClient *http.Client,
+	subreddit string,
+	interval time.Duration,
+	searchTerms []string,
+) {
 	defer wg.Done()
-
-	redditClient, err := reddit.NewClient(
-		reddit.Credentials{
-			ID:       os.Getenv("RIPPL_CLIENT_ID"),
-			Secret:   os.Getenv("RIPPL_CLIENT_SECRET"),
-			Username: os.Getenv("RIPPL_USERNAME"),
-			Password: os.Getenv("RIPPL_PASSWORD"),
-		},
-	)
-	if err != nil {
-		log.Printf("Reddit Client failure: %s", err)
-
-		return
-	}
-
-	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	posts, errs, stop := redditClient.Stream.Posts(
 		strings.TrimSpace(subreddit),
@@ -50,8 +42,6 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 			if !ok {
 				return
 			}
-			postData := bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID)))
-
 			match := false
 			if len(searchTerms) > 0 {
 				for _, term := range searchTerms {
@@ -67,13 +57,24 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 				}
 			}
 
-			_, err := downloadClient.Post(
-				os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"),
-				"application/json",
-				postData,
-			)
+			requestBody := bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID)))
+
+			req, err := http.NewRequest(http.MethodPost, os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"), requestBody)
+			if err != nil {
+				log.Printf("Preparing request to download submission %s failed: %s", post.ID, err)
+
+				continue
+			}
+
+			resp, err := downloadClient.Do(req)
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
+
+				continue
+			}
+
+			if err = resp.Body.Close(); err != nil {
+				log.Printf("Failed to close response body: %s", err)
 			}
 		case err, ok := <-errs:
 			if !ok {
@@ -82,6 +83,7 @@ func stream(ctx context.Context, wg *sync.WaitGroup, subreddit string, interval 
 			log.Printf("Streaming failure: %s", err)
 		case <-ctx.Done():
 			log.Printf("Context cancelled, %s stream stopping", subreddit)
+
 			return
 		}
 	}
@@ -92,6 +94,22 @@ func main() {
 	defer stop()
 
 	wg := sync.WaitGroup{}
+
+	redditClient, err := reddit.NewClient(
+		reddit.Credentials{
+			ID:       os.Getenv("RIPPL_CLIENT_ID"),
+			Secret:   os.Getenv("RIPPL_CLIENT_SECRET"),
+			Username: os.Getenv("RIPPL_USERNAME"),
+			Password: os.Getenv("RIPPL_PASSWORD"),
+		},
+	)
+	if err != nil {
+		log.Printf("Reddit Client failure: %s", err)
+
+		return
+	}
+
+	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
 
 	subredditsStr := os.Getenv("RIPPL_SUBREDDITS")
 	subreddits := strings.Split(subredditsStr, ",")
@@ -115,7 +133,7 @@ func main() {
 		subreddit := subreddits[i]
 		wg.Add(1)
 
-		go stream(ctx, &wg, subreddit, time.Duration(interval)*time.Second, searchTerms)
+		go stream(ctx, &wg, redditClient, downloadClient, subreddit, time.Duration(interval)*time.Second, searchTerms)
 	}
 
 	wg.Wait()
