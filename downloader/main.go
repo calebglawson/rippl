@@ -53,7 +53,7 @@ func (p *SubmissionPasser) handlePost(writer http.ResponseWriter, request *http.
 }
 
 func flush(queue []string) []string {
-	batch := make([]string, 0, 10)
+	batch := make([]string, len(queue))
 	copy(batch, queue)
 
 	go runScript(batch)
