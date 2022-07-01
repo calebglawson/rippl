@@ -2,6 +2,7 @@ import logging
 from configparser import ConfigParser
 from pathlib import Path
 from sys import stdout
+from typing import List
 
 import typer
 from bdfr.downloader import DownloadFactory
@@ -15,7 +16,7 @@ Log_Format = "%(levelname)s %(asctime)s - %(message)s"
 LOGGER = logging.getLogger(__name__)
 
 
-def main(submission_id: str):
+def main(submission_ids: List[str]):
     logging.basicConfig(
         stream=stdout,
         filemode="w",
@@ -34,47 +35,51 @@ def main(submission_id: str):
         username=cfg.get(RIPPL_SECTION, "Username"),
     )
 
-    submission = Submission(r, id=submission_id)
-    subreddit_path = Path.joinpath(Path(cfg.get(RIPPL_SECTION, "BaseDownloadPath")), submission.subreddit.display_name)
+    for submission_id in submission_ids:
+        submission = Submission(r, id=submission_id)
+        subreddit_path = Path.joinpath(
+            Path(cfg.get(RIPPL_SECTION, "BaseDownloadPath")),
+            submission.subreddit.display_name,
+        )
 
-    try:
-        downloader_class = DownloadFactory.pull_lever(submission.url)
-        downloader = downloader_class(submission)
-        LOGGER.debug(f'Using {downloader_class.__name__} with url {submission.url}')
-
-    except NotADownloadableLinkError as e:
-        LOGGER.error(f'Could not download submission {submission.id}: {e}')
-
-        return
-    try:
-        resources = downloader.find_resources()
-    except SiteDownloaderError as e:
-        LOGGER.error(f'Site {downloader_class.__name__} failed to download submission {submission.id}: {e}')
-
-        return
-
-    for resource in resources:
         try:
-            resource.download()
+            downloader_class = DownloadFactory.pull_lever(submission.url)
+            downloader = downloader_class(submission)
+            LOGGER.debug(f'Using {downloader_class.__name__} with url {submission.url}')
 
-            ext = resource.extension if "." in resource.extension else f'.{resource.extension}'
-            if "txt" in ext:
-                return
+        except NotADownloadableLinkError as e:
+            LOGGER.error(f'Could not download submission {submission.id}: {e}')
 
-            filepath = Path.joinpath(subreddit_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
+            return
+        try:
+            resources = downloader.find_resources()
+        except SiteDownloaderError as e:
+            LOGGER.error(f'Site {downloader_class.__name__} failed to download submission {submission.id}: {e}')
 
+            return
+
+        for resource in resources:
             try:
-                Path(subreddit_path).mkdir(exist_ok=True)
+                resource.download()
 
-                with open(filepath, 'wb') as new:
-                    new.write(resource.content)
+                ext = resource.extension if "." in resource.extension else f'.{resource.extension}'
+                if "txt" in ext:
+                    return
 
-                LOGGER.info(f'Downloaded: {filepath}')
+                filepath = Path.joinpath(subreddit_path, f'{submission.author}_{resource.hash.hexdigest()}{ext}')
+
+                try:
+                    Path(subreddit_path).mkdir(exist_ok=True)
+
+                    with open(filepath, 'wb') as new:
+                        new.write(resource.content)
+
+                    LOGGER.info(f'Downloaded: {filepath}')
+                except Exception as e:
+                    LOGGER.error(f'Failed to write file {filepath}: {e}')
+
             except Exception as e:
-                LOGGER.error(f'Failed to write file {filepath}: {e}')
-
-        except Exception as e:
-            LOGGER.error(f'Failed to download resource {resource.url} for submission {submission.id}: {e}')
+                LOGGER.error(f'Failed to download resource {resource.url} for submission {submission.id}: {e}')
 
 
 if __name__ == "__main__":

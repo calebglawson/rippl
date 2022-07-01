@@ -6,58 +6,99 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
+	"time"
 )
 
 type DownloadRequest struct {
 	SubmissionID string `json:"submission_id"`
 }
 
-func main() {
-	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		if request.Method != http.MethodPost {
-			writer.WriteHeader(http.StatusMethodNotAllowed)
+type SubmissionPasser struct {
+	submissions chan string
+}
 
-			return
-		}
+func (p *SubmissionPasser) handlePost(writer http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
 
-		data, err := io.ReadAll(request.Body)
-		if err != nil {
-			log.Printf("Could not read request body: %s", err)
-			writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-			return
-		}
+	data, err := io.ReadAll(request.Body)
+	if err != nil {
+		log.Printf("Could not read request body: %s", err)
+		writer.WriteHeader(http.StatusInternalServerError)
 
-		if err = request.Body.Close(); err != nil {
-			log.Printf("Could not close request body: %s", err)
-			writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-			return
-		}
+	if err = request.Body.Close(); err != nil {
+		log.Printf("Could not close request body: %s", err)
+		writer.WriteHeader(http.StatusInternalServerError)
 
-		req := &DownloadRequest{}
-		if err = json.Unmarshal(data, req); err != nil {
-			log.Printf("Could not unmarshal request body: %s", err)
-			writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-			return
-		}
+	req := &DownloadRequest{}
+	if err = json.Unmarshal(data, req); err != nil {
+		log.Printf("Could not unmarshal request body: %s", err)
+		writer.WriteHeader(http.StatusBadRequest)
 
-		writer.WriteHeader(http.StatusAccepted)
+		return
+	}
 
-		go func() {
-			cmd := exec.Command("python3", "download.py", req.SubmissionID)
-			stdOutStdErr, err := cmd.CombinedOutput()
-			if err != nil {
-				log.Printf("Running download script failed: %s", err)
+	writer.WriteHeader(http.StatusAccepted)
+	p.submissions <- req.SubmissionID
+}
+
+func flush(queue []string) []string {
+	batch := make([]string, 0, 10)
+	copy(batch, queue)
+
+	go runScript(batch)
+
+	return make([]string, 0, 10)
+}
+
+func runScript(batch []string) {
+	args := []string{"download.py"}
+	args = append(args, batch...)
+	cmd := exec.Command("python3", args...)
+	stdOutStdErr, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Running download script failed: %s", err)
+	}
+
+	log.Printf("Script output: %s", stdOutStdErr)
+}
+
+func (p *SubmissionPasser) batchRequests() {
+	queue := make([]string, 0, 10)
+	ticker := time.NewTicker(time.Minute)
+
+	for {
+		select {
+		case submission, ok := <-p.submissions:
+			if ok {
+				if len(queue) == cap(queue) {
+					queue = flush(queue)
+				}
+
+				queue = append(queue, submission)
 			}
+		case <-ticker.C:
+			queue = flush(queue)
+		}
+	}
+}
 
-			log.Printf("Script output: %s", stdOutStdErr)
-		}()
-
-	})
-
+func main() {
 	log.Print("Starting...")
+
+	passer := &SubmissionPasser{submissions: make(chan string)}
+	go passer.batchRequests()
+
+	http.HandleFunc("/", passer.handlePost)
 
 	if err := http.ListenAndServe(":6984", nil); err != nil {
 		log.Printf("Server stopped: %s", err)

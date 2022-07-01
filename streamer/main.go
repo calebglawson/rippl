@@ -20,7 +20,6 @@ func stream(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	redditClient *reddit.Client,
-	downloadClient *http.Client,
 	subreddit string,
 	interval time.Duration,
 	searchTerms []string,
@@ -66,7 +65,7 @@ func stream(
 				continue
 			}
 
-			resp, err := downloadClient.Do(req)
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				log.Printf("Request to download submission %s failed: %s", post.ID, err)
 
@@ -80,7 +79,14 @@ func stream(
 			if !ok {
 				return
 			}
+
 			log.Printf("Streaming failure: %s", err)
+
+			if er, ok := err.(*reddit.ErrorResponse); ok && er.Response.StatusCode == http.StatusUnauthorized {
+				log.Printf("Received Unauthorized response status code, stream stopping")
+
+				return
+			}
 		case <-ctx.Done():
 			log.Printf("Context cancelled, %s stream stopping", subreddit)
 
@@ -109,8 +115,6 @@ func main() {
 		return
 	}
 
-	downloadClient := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}}
-
 	subredditsStr := os.Getenv("RIPPL_SUBREDDITS")
 	subreddits := strings.Split(subredditsStr, ",")
 
@@ -133,7 +137,7 @@ func main() {
 		subreddit := subreddits[i]
 		wg.Add(1)
 
-		go stream(ctx, &wg, redditClient, downloadClient, subreddit, time.Duration(interval)*time.Second, searchTerms)
+		go stream(ctx, &wg, redditClient, subreddit, time.Duration(interval)*time.Second, searchTerms)
 	}
 
 	wg.Wait()
