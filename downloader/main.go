@@ -49,6 +49,7 @@ func (p *SubmissionPasser) handlePost(writer http.ResponseWriter, request *http.
 
 	writer.WriteHeader(http.StatusAccepted)
 	p.submissions <- req.SubmissionID
+	log.Printf("Accepted request for submission: %s", req.SubmissionID)
 }
 
 func flush(queue []string) []string {
@@ -88,7 +89,9 @@ func (p *SubmissionPasser) batchRequests() {
 				queue = append(queue, submission)
 			}
 		case <-ticker.C:
-			queue = flush(queue)
+			if len(queue) > 0 {
+				queue = flush(queue)
+			}
 		}
 	}
 }
