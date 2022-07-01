@@ -64,6 +64,7 @@ func runScript(batch []string) {
 	args := []string{"download.py"}
 	args = append(args, batch...)
 	cmd := exec.Command("python3", args...)
+	log.Printf("Running: %s", cmd)
 	stdOutStdErr, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("Running download script failed: %s", err)
