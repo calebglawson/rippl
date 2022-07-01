@@ -80,7 +80,7 @@ func (p *SubmissionPasser) batchRequests() {
 		select {
 		case submission, ok := <-p.submissions:
 			if ok {
-				if len(queue) == cap(queue) {
+				if len(queue) >= 10 {
 					queue = flush(queue)
 				}
 
