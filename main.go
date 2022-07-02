@@ -25,19 +25,13 @@ func (d *Downloader) run(ctx context.Context) {
 	ticker := time.NewTicker(d.interval)
 
 	for {
+		<-ticker.C
+		d.flush()
+
 		select {
 		case <-ctx.Done():
-			d.flush()
 
 			return
-		case <-ticker.C:
-			if len(d.queue) > 0 {
-				d.flush()
-			}
-		default:
-			if len(d.queue) >= 10 {
-				d.flush()
-			}
 		}
 	}
 }
