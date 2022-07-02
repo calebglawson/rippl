@@ -23,10 +23,9 @@ type Downloader struct {
 
 func (d *Downloader) run(ctx context.Context) {
 	ticker := time.NewTicker(d.interval)
+	defer ticker.Stop()
 
-	for {
-		<-ticker.C
-
+	for _ = range ticker.C {
 		if len(d.queue) > 0 {
 			d.flush()
 		}
