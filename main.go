@@ -26,7 +26,10 @@ func (d *Downloader) run(ctx context.Context) {
 
 	for {
 		<-ticker.C
-		d.flush()
+
+		if len(d.queue) > 0 {
+			d.flush()
+		}
 
 		select {
 		case <-ctx.Done():
