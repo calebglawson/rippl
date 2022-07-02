@@ -35,7 +35,7 @@ def main(submission_ids: List[str]):
     for submission_id in submission_ids:
         submission = Submission(r, id=submission_id)
         subreddit_path = Path.joinpath(
-            Path(environ.get("RIPPLE_BASE_DOWNLOAD_PATH", ".")),
+            Path(environ.get("RIPPL_BASE_DOWNLOAD_PATH", ".")),
             submission.subreddit.display_name,
         )
 
