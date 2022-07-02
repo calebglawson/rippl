@@ -22,18 +22,17 @@ type Downloader struct {
 }
 
 func (d *Downloader) run(ctx context.Context) {
-		if len(d.queue) > 0 {
-			d.flush()
-		}
-
-		select {
-		case <-ctx.Done():
-
-			return
-		}
-
-		time.Sleep(d.interval)
+	if len(d.queue) > 0 {
+		d.flush()
 	}
+
+	select {
+	case <-ctx.Done():
+
+		return
+	}
+
+	time.Sleep(d.interval)
 }
 
 func (d *Downloader) flush() {
