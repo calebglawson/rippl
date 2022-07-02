@@ -30,9 +30,9 @@ func (d *Downloader) run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
+		default:
+			time.Sleep(d.interval)
 		}
-
-		time.Sleep(d.interval)
 	}
 }
 
