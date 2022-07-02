@@ -40,20 +40,25 @@ func (d *Downloader) flush() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	args := []string{"download.py"}
-	args = append(args, d.queue...)
-	cmd := exec.Command("python3", args...)
-	log.Printf("Running: %s", cmd)
-	stdOutStdErr, err := cmd.CombinedOutput()
-	if err != nil {
-		log.Printf("Running download script failed: %s", err)
-	}
-
-	if len(stdOutStdErr) > 0 {
-		log.Printf("Script output: %s", stdOutStdErr)
-	}
+	var submissionIDs []string
+	copy(submissionIDs, d.queue)
 
 	d.queue = []string{}
+
+	go func() {
+		args := []string{"download.py"}
+		args = append(args, submissionIDs...)
+		cmd := exec.Command("python3", args...)
+		log.Printf("Running: %s", cmd)
+		stdOutStdErr, err := cmd.CombinedOutput()
+		if err != nil {
+			log.Printf("Running download script failed: %s", err)
+		}
+
+		if len(stdOutStdErr) > 0 {
+			log.Printf("Script output: %s", stdOutStdErr)
+		}
+	}()
 }
 
 func (d *Downloader) add(submissionID string) {
