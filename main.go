@@ -40,7 +40,7 @@ func (d *Downloader) flush() {
 	d.lock.Lock()
 	defer d.lock.Unlock()
 
-	var submissionIDs []string
+	submissionIDs := make([]string, len(d.queue))
 	copy(submissionIDs, d.queue)
 
 	d.queue = []string{}
