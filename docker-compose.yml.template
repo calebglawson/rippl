@@ -12,4 +12,6 @@ services:
       RIPPL_INTERVAL: ${RIPPL_INTERVAL}
       RIPPL_SEARCH_TERMS: ${RIPPL_SEARCH_TERMS}
       RIPPL_BASE_DOWNLOAD_PATH: ${RIPPL_BASE_DOWNLOAD_PATH}
+    volumes:
+      - outside:inside
     restart: unless-stopped
