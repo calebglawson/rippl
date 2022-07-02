@@ -1,12 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -16,14 +15,61 @@ import (
 	"github.com/vartanbeno/go-reddit/v2/reddit"
 )
 
-func stream(
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	redditClient *reddit.Client,
-	subreddit string,
-	interval time.Duration,
-	searchTerms []string,
-) {
+type Downloader struct {
+	queue    []string
+	interval time.Duration
+	lock     sync.Mutex
+}
+
+func (d *Downloader) run(ctx context.Context) {
+	ticker := time.NewTicker(d.interval)
+
+	for {
+		select {
+		case <-ctx.Done():
+			d.flush()
+
+			return
+		case <-ticker.C:
+			if len(d.queue) > 0 {
+				d.flush()
+			}
+		default:
+			if len(d.queue) >= 10 {
+				d.flush()
+			}
+		}
+	}
+}
+
+func (d *Downloader) flush() {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	args := []string{"download.py"}
+	args = append(args, d.queue...)
+	cmd := exec.Command("python3", args...)
+	log.Printf("Running: %s", cmd)
+	stdOutStdErr, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Running download script failed: %s", err)
+	}
+
+	if len(stdOutStdErr) > 0 {
+		log.Printf("Script output: %s", stdOutStdErr)
+	}
+
+	d.queue = []string{}
+}
+
+func (d *Downloader) add(submissionID string) {
+	d.lock.Lock()
+	defer d.lock.Unlock()
+
+	d.queue = append(d.queue, submissionID)
+}
+
+func stream(ctx context.Context, wg *sync.WaitGroup, redditClient *reddit.Client, downloader *Downloader, subreddit string, interval time.Duration, searchTerms []string) {
 	defer wg.Done()
 
 	posts, errs, stop := redditClient.Stream.Posts(
@@ -56,25 +102,7 @@ func stream(
 				}
 			}
 
-			requestBody := bytes.NewBuffer([]byte(fmt.Sprintf("{\"submission_id\": \"%s\"}", post.ID)))
-
-			req, err := http.NewRequest(http.MethodPost, os.Getenv("RIPPL_DOWNLOAD_SERVER_URL"), requestBody)
-			if err != nil {
-				log.Printf("Preparing request to download submission %s failed: %s", post.ID, err)
-
-				continue
-			}
-
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				log.Printf("Request to download submission %s failed: %s", post.ID, err)
-
-				continue
-			}
-
-			if err = resp.Body.Close(); err != nil {
-				log.Printf("Failed to close response body: %s", err)
-			}
+			downloader.add(post.ID)
 		case err, ok := <-errs:
 			if !ok {
 				return
@@ -118,11 +146,6 @@ func main() {
 	subredditsStr := os.Getenv("RIPPL_SUBREDDITS")
 	subreddits := strings.Split(subredditsStr, ",")
 
-	interval, err := strconv.Atoi(os.Getenv("RIPPL_INTERVAL"))
-	if err != nil {
-		interval = len(subreddits)
-	}
-
 	searchTerms := make([]string, 0)
 	searchTermsStr := os.Getenv("RIPPL_SEARCH_TERMS")
 	if len(searchTermsStr) > 0 {
@@ -133,11 +156,21 @@ func main() {
 		}
 	}
 
+	intervalInt, err := strconv.Atoi(os.Getenv("RIPPL_INTERVAL"))
+	if err != nil {
+		intervalInt = len(subreddits)
+	}
+
+	interval := time.Duration(intervalInt) * time.Second
+
+	downloader := &Downloader{interval: interval}
+	go downloader.run(ctx)
+
 	for i := range subreddits {
 		subreddit := subreddits[i]
 		wg.Add(1)
 
-		go stream(ctx, &wg, redditClient, subreddit, time.Duration(interval)*time.Second, searchTerms)
+		go stream(ctx, &wg, redditClient, downloader, subreddit, interval, searchTerms)
 	}
 
 	wg.Wait()

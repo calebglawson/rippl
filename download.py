@@ -1,8 +1,8 @@
 import logging
-from configparser import ConfigParser
 from pathlib import Path
 from sys import stdout
 from typing import List
+from os import environ
 
 import typer
 from bdfr.downloader import DownloadFactory
@@ -24,21 +24,18 @@ def main(submission_ids: List[str]):
         level=logging.INFO,
     )
 
-    cfg = ConfigParser()
-    cfg.read("rippl.ini")
-
     r = Reddit(
-        client_id=cfg.get(RIPPL_SECTION, "ClientID"),
-        client_secret=cfg.get(RIPPL_SECTION, "ClientSecret"),
-        password=cfg.get(RIPPL_SECTION, "Password"),
+        client_id=environ.get("RIPPL_CLIENT_ID"),
+        client_secret=environ.get("RIPPL_CLIENT_SECRET"),
+        password=environ.get("RIPPL_PASSWORD"),
         user_agent="rippl v1",
-        username=cfg.get(RIPPL_SECTION, "Username"),
+        username=environ.get("RIPPL_USERNAME"),
     )
 
     for submission_id in submission_ids:
         submission = Submission(r, id=submission_id)
         subreddit_path = Path.joinpath(
-            Path(cfg.get(RIPPL_SECTION, "BaseDownloadPath")),
+            Path(environ.get("RIPPLE_BASE_DOWNLOAD_PATH", ".")),
             submission.subreddit.display_name,
         )
 
