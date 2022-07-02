@@ -1,4 +1,4 @@
-module rippl
+module streamer
 
 go 1.18
 
