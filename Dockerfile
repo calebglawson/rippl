@@ -18,6 +18,6 @@ COPY --from=builder streamer .
 # Python
 COPY download.py requirements.txt ./
 RUN pip install -r requirements.txt
-RUN apt-get update && apt-get install ffmpeg -y8
+RUN apt-get update && apt-get install ffmpeg -y
 # Exec built binary
 CMD ./streamer
