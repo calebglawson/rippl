@@ -12,7 +12,7 @@ COPY main.go .
 # Build app
 RUN go build -o streamer
 
-FROM python:3.10-alpine as production
+FROM python:3.10-slim-buster as production
 # Copy built binary from builder
 COPY --from=builder streamer .
 # Python
