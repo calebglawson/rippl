@@ -12,12 +12,12 @@ COPY main.go .
 # Build app
 RUN go build -o streamer
 
-FROM python:3.10-slim-buster as production
+FROM python:3.10-alpine as production
 # Copy built binary from builder
 COPY --from=builder streamer .
 # Python
 COPY download.py requirements.txt ./
 RUN pip install -r requirements.txt
-RUN apt-get update && apt-get install ffmpeg -y
+RUN apk add ffmpeg
 # Exec built binary
 CMD ./streamer

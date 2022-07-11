@@ -3,6 +3,7 @@ from pathlib import Path
 from sys import stdout
 from typing import List
 from os import environ
+from enum import Enum
 
 import typer
 from bdfr.downloader import DownloadFactory
@@ -16,12 +17,36 @@ Log_Format = "%(levelname)s %(asctime)s - %(message)s"
 LOGGER = logging.getLogger(__name__)
 
 
-def main(submission_ids: List[str]):
+class LoggingLevel(str, Enum):
+    critical = "critical"
+    error = "error"
+    warning = "warning"
+    info = "info"
+    debug = "debug"
+
+    def __int__(self):
+        level = self.__str__()
+
+        if self.critical in level:
+            return logging.CRITICAL
+        elif self.error in level:
+            return logging.ERROR
+        elif self.warning in level:
+            return logging.WARNING
+        elif self.info in level:
+            return logging.INFO
+        elif self.debug in level:
+            return logging.DEBUG
+
+
+def main(
+        submission_ids: List[str],
+        logging_level: LoggingLevel = typer.Option(default=logging.INFO),
+):
     logging.basicConfig(
         stream=stdout,
-        filemode="w",
         format=Log_Format,
-        level=logging.INFO,
+        level=int(logging_level),
     )
 
     r = Reddit(
@@ -71,7 +96,7 @@ def main(submission_ids: List[str]):
                     with open(filepath, 'wb') as new:
                         new.write(resource.content)
 
-                    LOGGER.info(f'Downloaded: {filepath}')
+                    LOGGER.debug(f'Downloaded: {filepath}')
                 except Exception as e:
                     LOGGER.error(f'Failed to write file {filepath}: {e}')
 

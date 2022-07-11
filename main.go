@@ -49,14 +49,8 @@ func (d *Downloader) flush() {
 		args := []string{"download.py"}
 		args = append(args, submissionIDs...)
 		cmd := exec.Command("python3", args...)
-		log.Printf("Running: %s", cmd)
-		stdOutStdErr, err := cmd.CombinedOutput()
-		if err != nil {
-			log.Printf("Running download script failed: %s", err)
-		}
-
-		if len(stdOutStdErr) > 0 {
-			log.Printf("Script output: %s", stdOutStdErr)
+		if err, combinedOutput := cmd.CombinedOutput(); err != nil {
+			log.Printf("Running `%s` failed: %s: %s", cmd, err, combinedOutput)
 		}
 	}()
 }
@@ -68,7 +62,15 @@ func (d *Downloader) add(submissionID string) {
 	d.queue = append(d.queue, submissionID)
 }
 
-func stream(ctx context.Context, wg *sync.WaitGroup, redditClient *reddit.Client, downloader *Downloader, subreddit string, interval time.Duration, searchTerms []string) {
+func stream(
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	redditClient *reddit.Client,
+	downloader *Downloader,
+	subreddit string,
+	interval time.Duration,
+	searchTerms []string,
+) {
 	defer wg.Done()
 
 	posts, errs, stop := redditClient.Stream.Posts(
