@@ -49,7 +49,7 @@ func (d *Downloader) flush() {
 		args := []string{"download.py"}
 		args = append(args, submissionIDs...)
 		cmd := exec.Command("python3", args...)
-		if err, combinedOutput := cmd.CombinedOutput(); err != nil {
+		if combinedOutput, err := cmd.CombinedOutput(); err != nil {
 			log.Printf("Running `%s` failed: %s: %s", cmd, err, combinedOutput)
 		}
 	}()
