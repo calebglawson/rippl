@@ -41,7 +41,7 @@ class LoggingLevel(str, Enum):
 
 def main(
         submission_ids: List[str],
-        logging_level: LoggingLevel = typer.Option(default=logging.INFO),
+        logging_level: LoggingLevel = typer.Option(default=LoggingLevel.info),
 ):
     logging.basicConfig(
         stream=stdout,
