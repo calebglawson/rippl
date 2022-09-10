@@ -80,7 +80,7 @@ func stream(
 	)
 	defer stop()
 
-	log.Printf("Stream %s started", subreddit)
+	log.Printf("[subreddit=%s] Stream started", subreddit)
 
 	for {
 		select {
