@@ -110,28 +110,29 @@ func stream(
 				return
 			}
 
-			log.Printf("[subreddit=%s] Streaming failure: %s", subreddit, err)
-
 			er, ok := err.(*reddit.ErrorResponse)
 			if !ok {
+				log.Printf("[subreddit=%s] Streaming failure: %s", subreddit, err)
+
 				continue
 			}
 
 			switch er.Response.StatusCode {
-			case http.StatusUnauthorized:
-				log.Printf("[subreddit=%s] Received Unauthorized response status code, stream stopping", subreddit)
+			case http.StatusUnauthorized, http.StatusNotFound:
+				log.Printf(
+					"[subreddit=%s] [response_code=%d] Terminating HTTP Response code received, stream stopping",
+					subreddit,
+					er.Response.StatusCode,
+				)
 
 				return
-			case http.StatusNotFound:
-				log.Printf("[subreddit=%s] Received Not Found response status code, stream stopping", subreddit)
-
-				return
-			}
-
-			if ok && er.Response.StatusCode == http.StatusUnauthorized {
-				log.Printf("[subreddit=%s] Received Unauthorized response status code, stream stopping", subreddit)
-
-				return
+			default:
+				log.Printf(
+					"[subreddit=%s] [response_code=%d] Streaming failure: %s",
+					subreddit,
+					er.Response.StatusCode,
+					er,
+				)
 			}
 		case <-ctx.Done():
 			log.Printf("[subreddit=%s] - Context cancelled, stream stopping", subreddit)
