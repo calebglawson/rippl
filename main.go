@@ -16,15 +16,27 @@ import (
 )
 
 type Downloader struct {
-	queue    []string
-	interval time.Duration
-	lock     sync.Mutex
+	submissions chan string
+	interval    time.Duration
 }
 
 func (d *Downloader) run(ctx context.Context) {
 	for {
-		if len(d.queue) > 0 {
-			d.flush()
+		submissions := make([]string, 0)
+		for {
+			select {
+			case submission := <-d.submissions:
+				submissions = append(submissions, submission)
+
+				continue
+			default:
+			}
+
+			break
+		}
+
+		if len(submissions) > 0 {
+			go download(submissions)
 		}
 
 		select {
@@ -36,30 +48,22 @@ func (d *Downloader) run(ctx context.Context) {
 	}
 }
 
-func (d *Downloader) flush() {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-
-	submissionIDs := make([]string, len(d.queue))
-	copy(submissionIDs, d.queue)
-
-	d.queue = []string{}
-
-	go func() {
-		args := []string{"download.py"}
-		args = append(args, submissionIDs...)
-		cmd := exec.Command("python3", args...)
-		if combinedOutput, err := cmd.CombinedOutput(); err != nil {
-			log.Printf("Running `%s` failed: %s: %s", cmd, err, combinedOutput)
-		}
-	}()
+func (d *Downloader) add(submission string) {
+	select {
+	case d.submissions <- submission:
+		break
+	default:
+		log.Print("Submission buffer overflow: increase RIPPL_BUFFER_SIZE or reduce RIPPL_INTERVAL")
+	}
 }
 
-func (d *Downloader) add(submissionID string) {
-	d.lock.Lock()
-	defer d.lock.Unlock()
-
-	d.queue = append(d.queue, submissionID)
+func download(submissions []string) {
+	args := []string{"download.py"}
+	args = append(args, submissions...)
+	cmd := exec.Command("python3", args...)
+	if combinedOutput, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("Running `%s` failed: %s: %s", cmd, err, combinedOutput)
+	}
 }
 
 func stream(
@@ -135,7 +139,7 @@ func stream(
 				)
 			}
 		case <-ctx.Done():
-			log.Printf("[subreddit=%s] - Context cancelled, stream stopping", subreddit)
+			log.Printf("[subreddit=%s] Context cancelled, stream stopping", subreddit)
 
 			return
 		}
@@ -180,9 +184,14 @@ func main() {
 		intervalInt = len(subreddits)
 	}
 
+	downloadBufferSize, err := strconv.Atoi(os.Getenv("RIPPL_BUFFER_SIZE"))
+	if err != nil {
+		downloadBufferSize = len(subreddits) * 100
+	}
+
 	interval := time.Duration(intervalInt) * time.Second
 
-	downloader := &Downloader{interval: interval}
+	downloader := &Downloader{submissions: make(chan string, downloadBufferSize), interval: interval}
 	go downloader.run(ctx)
 
 	for i := range subreddits {
