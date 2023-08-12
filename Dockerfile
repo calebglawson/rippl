@@ -1,4 +1,4 @@
-FROM golang:1.18.3 as builder
+FROM golang:1.21 as builder
 # Define build env
 ENV GOOS linux
 ENV CGO_ENABLED 0
@@ -12,7 +12,7 @@ COPY main.go .
 # Build app
 RUN go build -o streamer
 
-FROM python:3.10-slim-buster as production
+FROM python:3.11-slim-buster as production
 # Copy built binary from builder
 COPY --from=builder streamer .
 # Python
